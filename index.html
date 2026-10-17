@@ -308,6 +308,13 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outlin
   font-weight: 700; font-size: 14px; text-align: center;
 }
 
+/* Gráfica del registro de ahorro. */
+.barras { display: flex; align-items: flex-end; gap: 8px; height: 170px; padding-top: 6px; }
+.barra { flex: 1; min-width: 0; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 6px; }
+.barra span { font-size: 11px; font-weight: 800; font-variant-numeric: tabular-nums; color: var(--muted); }
+.barra i { width: 100%; max-width: 40px; border-radius: 10px 10px 5px 5px; background: linear-gradient(180deg, var(--accent-2), var(--accent)); }
+.barra small { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: capitalize; }
+
 /* Pantallas de acceso: entrar, crear o unirse a un hogar. */
 .acceso-card {
   max-width: 420px; margin: 10vh auto 0; padding: 28px 22px; display: grid; gap: 14px;
@@ -437,7 +444,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outlin
   </button>
   <button type="button" data-tab="cuotas">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M3 10h18M8 3v4M16 3v4"/></svg>
-    <span>Cuotas</span>
+    <span>Pagos</span>
   </button>
   <button type="button" data-tab="ahorro">
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4.5"/><path d="M12 12h.01"/></svg>
@@ -511,11 +518,11 @@ const PALETA = ['#1F5FBF', '#1A8DBE', '#4E62CC', '#118A7C', '#7A6AD6', '#C9731A'
 const hashColor = (s) => { let h = 0; for (const ch of s) h = (h * 31 + ch.codePointAt(0)) >>> 0; return PALETA[h % PALETA.length]; };
 const colorDe = (cat) => COLOR[cat] || hashColor(cat || '');
 const iconoDe = (cat) => ICONO[cat] || (S.movs || []).find((m) => m.categoria === cat && m.icono)?.icono || '🏷️';
-const TITULOS = { inicio: 'Resumen', movs: 'Movimientos', cuotas: 'Cuotas', ahorro: 'Ahorro' };
+const TITULOS = { inicio: 'Resumen', movs: 'Movimientos', cuotas: 'Pagos', ahorro: 'Ahorro' };
 
 const S = {
   db: null, sinDb: false,
-  movs: null, compras: null, pagos: null, metas: null, aportes: null, cfg: null,
+  movs: null, compras: null, pagos: null, metas: null, aportes: null, cfg: null, recurrentes: null,
   tab: 'inicio', mes: hoy().slice(0, 7), filtro: 'todos',
   kind: null, sheetId: null,
 };
@@ -546,7 +553,8 @@ function resumen(mes) {
   }
   const ingresos = suma(movs.filter((m) => m.tipo === 'ingreso').map((m) => m.monto));
   const gastado = suma(gastos.map((m) => m.monto));
-  const porPagar = suma(pendientes().filter((p) => p.due.startsWith(mes)).map((p) => p.monto));
+  const mensualPend = mes === hoy().slice(0, 7) ? suma(pendientesMensuales(mes).map((r) => r.monto)) : 0;
+  const porPagar = r2(suma(pendientes().filter((p) => p.due.startsWith(mes)).map((p) => p.monto)) + mensualPend);
   return { movs, ingresos, gastos: gastado, porCat, porQuien, porPagar, disponible: r2(ingresos - gastado - porPagar) };
 }
 
@@ -565,7 +573,7 @@ function render() {
     v.innerHTML = `${head}<div class="card empty"><b>Esta vista no puede cargar sus datos</b><span>Abran el enlace de nuevo para ver y guardar movimientos.</span></div>`;
     return;
   }
-  if (!S.movs || !S.compras || !S.pagos || !S.metas || !S.aportes || !S.cfg) {
+  if (!S.movs || !S.compras || !S.pagos || !S.metas || !S.aportes || !S.cfg || !S.recurrentes) {
     v.innerHTML = `${head}<p class="empty">Cargando…</p>`;
     return;
   }
@@ -579,6 +587,7 @@ function vistaInicio() {
   const proximas = S.compras.map((c) => cuotasDe(c)[0]).filter(Boolean).sort(porDue).slice(0, 3);
   const recientes = [...r.movs].sort(porFechaDesc).slice(0, 5);
   const vacio = !S.movs.length && !S.compras.length && !S.metas.length;
+  const mensualesPend = S.mes === hoy().slice(0, 7) ? pendientesMensuales(S.mes) : [];
 
   const quien = ['p1', 'p2', 'ambos'].map((q) => {
     const v = r.porQuien[q] || 0;
@@ -604,7 +613,7 @@ function vistaInicio() {
         <div class="stats">
           <div class="stat"><span class="label">Ingresos</span><span class="num in">${money(r.ingresos)}</span></div>
           <div class="stat"><span class="label">Gastos</span><span class="num out">${money(r.gastos)}</span></div>
-          <div class="stat"><span class="label">Cuotas</span><span class="num warn">${money(r.porPagar)}</span></div>
+          <div class="stat"><span class="label">Por pagar</span><span class="num warn">${money(r.porPagar)}</span></div>
         </div>
       </section>
       <section class="card stack c-5">
@@ -624,6 +633,16 @@ function vistaInicio() {
             <button type="button" class="btn sm" data-act="pagar" data-id="${p.c.id}">Pagar</button>
           </div>`).join('')}</div>` : '<p class="muted">No tienen cuotas pendientes.</p>'}
       </section>
+      ${mensualesPend.length ? `
+      <section class="card stack c-6">
+        <div class="row"><h3>Gastos mensuales por pagar</h3><button type="button" class="link" data-tab="cuotas">Ver todos</button></div>
+        <div class="list">${mensualesPend.map((r) => `
+          <div class="mini">
+            <div class="t"><b>${esc(r.nombre)}</b><small>Día ${r.dia} · ${esc(quienNombre(r.quien))}</small></div>
+            <span class="num">${money(r.monto)}</span>
+            <button type="button" class="btn sm" data-act="pagar-mensual" data-id="${r.id}">Pagar</button>
+          </div>`).join('')}</div>
+      </section>` : ''}
       <section class="card stack full">
         <div class="row"><h3>Últimos movimientos</h3><button type="button" class="link" data-tab="movs">Ver todos</button></div>
         ${recientes.length ? `<div class="list">${recientes.map((m) => itemMov(m, false)).join('')}</div>` : '<p class="muted">Aún no hay movimientos este mes.</p>'}
@@ -750,6 +769,8 @@ function vistaCuotas() {
 
   return `
     <div class="stack">
+      ${seccionMensuales()}
+      <h3 class="dia">Compras en cuotas</h3>
       <section class="card stack">
         <div class="stats">
           <div class="stat"><span class="label">Debes</span><span class="num">${money(deuda)}</span></div>
@@ -809,7 +830,7 @@ function tarjetaMeta(m) {
 
 function vistaAhorro() {
   const ingreso = Number(S.cfg?.ingresoEstimado) || 0;
-  const fijos = Number(S.cfg?.gastosFijos) || 0;
+  const fijos = suma(mensualesVigentes(hoy().slice(0, 7)).map((r) => r.monto));
   const cuotasMes = compromisoMensual();
   const capacidad = r2(ingreso - fijos - cuotasMes);
   const total = suma(S.aportes.map((a) => a.monto));
@@ -823,7 +844,7 @@ function vistaAhorro() {
           <div class="big ${capacidad < 0 ? 'out' : 'in'}">${money(capacidad)}</div>
         </div>
         ${ingreso
-          ? `<div class="stack tight">${linea('Ingreso estimado', money(ingreso), 'in')}${linea('Gastos fijos', money(-fijos))}${linea('Cuotas al mes', money(-cuotasMes))}</div>`
+          ? `<div class="stack tight">${linea('Ingreso estimado', money(ingreso), 'in')}${linea('Gastos mensuales', money(-fijos))}${linea('Cuotas al mes', money(-cuotasMes))}</div>`
           : '<p class="muted">Pongan su ingreso mensual estimado en Ajustes para ver cuánto pueden ahorrar.</p>'}
       </section>
       <section class="card stack c-7">
@@ -837,8 +858,108 @@ function vistaAhorro() {
         </div>
         ${S.metas.length ? '' : '<p class="muted">Pongan un nombre a lo que quieren ahorrar, como un viaje o un fondo de emergencia, y cuánto necesitan.</p>'}
       </section>
+      ${seccionRegistro()}
       ${S.metas.length ? `<div class="cards-grid">${S.metas.map(tarjetaMeta).join('')}</div>` : ''}
     </div>`;
+}
+
+/* ---------- Gastos mensuales y registro de ahorro ---------- */
+
+// Un gasto mensual cuenta desde el mes en que se creó; cada mes se marca como pagado una vez.
+const mensualesVigentes = (mes) => (S.recurrentes || []).filter((r) => (r.desde || '0000-00') <= mes);
+const pagoMensual = (r, mes) => (S.movs || []).find((m) => m.recurrenteId === r.id && m.mes === mes);
+const fechaMensual = (r, mes) => {
+  const [y, m] = mes.split('-').map(Number);
+  const ultimo = new Date(y, m, 0).getDate();
+  return `${mes}-${pad(Math.min(Number(r.dia) || 1, ultimo))}`;
+};
+const pendientesMensuales = (mes) => mensualesVigentes(mes).filter((r) => !pagoMensual(r, mes));
+
+function seccionMensuales() {
+  const mes = hoy().slice(0, 7);
+  const lista = mensualesVigentes(mes);
+  const total = suma(lista.map((r) => r.monto));
+  const cubierto = suma(lista.filter((r) => pagoMensual(r, mes)).map((r) => r.monto));
+  const filas = lista.map((r) => {
+    const pago = pagoMensual(r, mes);
+    return `
+      <div class="item">
+        <span class="ico" style="background:color-mix(in srgb, ${colorDe(r.categoria)} 18%, transparent)" aria-hidden="true">${esc(r.icono || iconoDe(r.categoria))}</span>
+        <div class="t"><b>${esc(r.nombre)}</b><small>Día ${r.dia} · ${esc(quienNombre(r.quien))}</small></div>
+        <div class="side">
+          <span class="num">${money(r.monto)}</span>
+          ${pago
+            ? `<button type="button" class="link" data-act="deshacer-mensual" data-id="${r.id}">✓ Pagado · deshacer</button>`
+            : `<button type="button" class="btn sm" data-act="pagar-mensual" data-id="${r.id}">Pagar</button>`}
+          <button type="button" class="link danger" data-act="borrar-mensual" data-id="${r.id}">Borrar</button>
+        </div>
+      </div>`;
+  }).join('');
+  return `
+    <section class="card stack">
+      <div class="row"><h3>Gastos mensuales</h3><span class="muted">${money(cubierto)} de ${money(total)} pagados</span></div>
+      ${lista.length ? `<div class="list">${filas}</div>` : '<p class="muted">Aquí van el plan del teléfono, la luz, el internet o cualquier gasto que se repite cada mes.</p>'}
+      <button type="button" class="btn ghost block" data-act="nuevo-mensual">+ Agregar gasto mensual</button>
+    </section>`;
+}
+
+async function pagarMensual(id) {
+  const mes = hoy().slice(0, 7);
+  const r = (S.recurrentes || []).find((x) => x.id === id);
+  if (!r || pagoMensual(r, mes)) return;
+  await escribir(() => S.db.collection('movimientos').doc(`mes-${r.id}-${mes}`).set({
+    tipo: 'gasto',
+    monto: r.monto,
+    categoria: r.categoria,
+    icono: r.icono,
+    fecha: fechaMensual(r, mes),
+    quien: r.quien,
+    nota: r.nombre,
+    recurrenteId: r.id,
+    mes,
+    creado: Date.now(),
+  }), `${r.nombre} pagado`);
+}
+
+async function deshacerMensual(id) {
+  const mes = hoy().slice(0, 7);
+  await escribir(() => S.db.collection('movimientos').doc(`mes-${id}-${mes}`).delete(), 'Pago deshecho');
+}
+
+async function borrarMensual(id) {
+  const r = (S.recurrentes || []).find((x) => x.id === id);
+  await escribir(() => S.db.collection('recurrentes').doc(id).delete(), `${r?.nombre || 'Gasto'} borrado`);
+}
+
+function seccionRegistro() {
+  const hoyMes = hoy().slice(0, 7);
+  const meses = Array.from({ length: 6 }, (_, i) => moverMes(hoyMes, i - 5));
+  const totales = {};
+  for (const a of S.aportes) {
+    const k = (a.fecha || '').slice(0, 7);
+    totales[k] = r2((totales[k] || 0) + a.monto);
+  }
+  const maximo = Math.max(1, ...meses.map((m) => totales[m] || 0));
+  const barras = meses.map((m) => {
+    const v = totales[m] || 0;
+    const alto = Math.max(4, Math.round((v / maximo) * 110));
+    const corto = aDate(`${m}-01`).toLocaleDateString('es', { month: 'short' }).replace('.', '');
+    return `<div class="barra"><span>${v ? Math.round(v) : ''}</span><i style="height:${v ? alto : 4}px"></i><small>${corto}</small></div>`;
+  }).join('');
+  const etiqueta = (a) => (a.metaId ? (S.metas.find((m) => m.id === a.metaId)?.nombre || 'Meta') : 'Ahorro general');
+  const recientes = [...S.aportes].sort(porFechaDesc).slice(0, 8);
+  const filas = recientes.map((a) => `
+    <div class="mini">
+      <div class="t"><b>${esc(etiqueta(a))}</b><small>${fechaCorta(a.fecha)}${a.nota ? ' · ' + esc(a.nota) : ''} · ${esc(quienNombre(a.quien))}</small></div>
+      <span class="num in">+${money(a.monto)}</span>
+      <button type="button" class="link danger" data-act="borrar-registro" data-id="${a.id}">Borrar</button>
+    </div>`).join('');
+  return `
+    <section class="card stack full">
+      <div class="row"><h3>Lo que llevan ahorrado</h3><button type="button" class="btn sm" data-act="nuevo-registro">+ Registrar ahorro</button></div>
+      <div class="barras">${barras}</div>
+      ${recientes.length ? `<div class="list">${filas}</div>` : '<p class="muted">Cada vez que ahorren, regístrenlo aquí. Sale en la gráfica y suma al total.</p>'}
+    </section>`;
 }
 
 /* ---------- Formularios (hoja inferior en celular, diálogo en computadora) ---------- */
@@ -959,8 +1080,7 @@ function abrir(kind, id = null) {
       </div>
       ${campo('Moneda', `<input name="moneda" maxlength="4" value="${esc(c.moneda || '$')}">`)}
       ${campo('Ingreso mensual estimado', `<input name="ingresoEstimado" type="number" inputmode="decimal" step="0.01" min="0" value="${c.ingresoEstimado ?? ''}">`)}
-      ${campo('Gastos fijos al mes', `<input name="gastosFijos" type="number" inputmode="decimal" step="0.01" min="0" value="${c.gastosFijos ?? ''}">`)}
-      <p class="muted">En el ingreso pueden sumar el sueldo y las clases de fin de semana. Los gastos fijos son lo que pagan cada mes sin falta: casa, comida, servicios.</p>
+      <p class="muted">En el ingreso pueden sumar el sueldo y las clases de fin de semana. Los gastos mensuales se anotan en Pagos.</p>
       ${S.demo ? '' : `<div class="stack tight">
         <span class="label">Código de su hogar</span>
         <div class="row"><b class="num">${esc(S.hogar || '')}</b><button type="button" class="btn ghost sm" data-act="copiar-codigo">Copiar</button></div>
@@ -970,8 +1090,35 @@ function abrir(kind, id = null) {
       ${S.demo ? '' : '<button type="button" class="btn ghost block" data-act="salir">Cerrar sesión</button>'}`;
   }
 
+  if (kind === 'mensual') {
+    $('#sheet-t').textContent = 'Gasto mensual';
+    f.innerHTML = `
+      ${campo('¿Qué es?', '<input name="nombre" maxlength="40" placeholder="Plan del teléfono, luz, internet…" required>')}
+      <div class="grid2">
+        ${campo('Monto', '<input name="monto" type="number" inputmode="decimal" step="0.01" min="0.01" required>')}
+        ${campo('Día de pago', '<input name="dia" type="number" inputmode="numeric" step="1" min="1" max="31" value="1" required>')}
+      </div>
+      ${campo('Categoría', `<select name="categoria" required>${CATS.gasto.map((c) => `<option value="${esc(c)}">${esc(iconoDe(c))} ${esc(c)}</option>`).join('')}</select>`)}
+      ${quienField('ambos')}
+      <p class="muted">Se cuenta cada mes desde hoy. Cada mes lo marcan como pagado con un toque.</p>
+      <button type="submit" class="btn block">Guardar</button>`;
+  }
+
+  if (kind === 'registro') {
+    $('#sheet-t').textContent = 'Registrar ahorro';
+    f.innerHTML = `
+      ${campo('Monto', '<input name="monto" type="number" inputmode="decimal" step="0.01" min="0.01" required>', 'amount')}
+      ${campo('¿A dónde va?', `<select name="meta"><option value="">Ahorro general</option>${S.metas.map((m) => `<option value="${esc(m.id)}">${esc(m.nombre)}</option>`).join('')}</select>`)}
+      <div class="grid2">
+        ${campo('Fecha', `<input name="fecha" type="date" value="${h}" required>`)}
+        ${campo('Nota (opcional)', '<input name="nota" maxlength="60" placeholder="Quincena, bono…">')}
+      </div>
+      ${quienField('ambos')}
+      <button type="submit" class="btn block">Guardar ahorro</button>`;
+  }
+
   $('#sheet').hidden = false;
-  if (kind === 'mov' || kind === 'aporte') f.querySelector('input[name="monto"]')?.focus({ preventScroll: true });
+  if (kind === 'mov' || kind === 'aporte' || kind === 'registro') f.querySelector('input[name="monto"]')?.focus({ preventScroll: true });
 }
 
 function cerrar() {
@@ -1054,13 +1201,39 @@ async function guardar(fd) {
     }), 'Aporte guardado');
   }
 
+  if (S.kind === 'mensual') {
+    const nombre = String(fd.get('nombre') || '').trim();
+    const monto = r2(fd.get('monto'));
+    const dia = Math.floor(Number(fd.get('dia')));
+    if (!nombre) return invalido('Escriban el nombre del gasto.');
+    if (!(monto > 0)) return invalido('Escriban un monto mayor que cero.');
+    if (!(dia >= 1 && dia <= 31)) return invalido('El día de pago debe estar entre 1 y 31.');
+    const categoria = fd.get('categoria');
+    return escribir(() => S.db.collection('recurrentes').add({
+      nombre, monto, dia, categoria, icono: iconoDe(categoria), quien: fd.get('quien') || 'ambos',
+      desde: hoy().slice(0, 7), creado: Date.now(),
+    }), 'Gasto mensual guardado');
+  }
+
+  if (S.kind === 'registro') {
+    const monto = r2(fd.get('monto'));
+    if (!(monto > 0)) return invalido('Escriban un monto mayor que cero.');
+    return escribir(() => S.db.collection('aportes').add({
+      metaId: fd.get('meta') || null,
+      monto,
+      fecha: fd.get('fecha'),
+      nota: String(fd.get('nota') || '').trim(),
+      quien: fd.get('quien') || 'ambos',
+      creado: Date.now(),
+    }), 'Ahorro registrado');
+  }
+
   if (S.kind === 'ajustes') {
     const cfg = {
       nombre1: String(fd.get('nombre1')).trim(),
       nombre2: String(fd.get('nombre2')).trim(),
       moneda: String(fd.get('moneda') || '').trim() || '$',
       ingresoEstimado: r2(fd.get('ingresoEstimado')),
-      gastosFijos: r2(fd.get('gastosFijos')),
     };
     return escribir(() => S.db.doc('config/principal').set(cfg), 'Ajustes guardados');
   }
@@ -1189,6 +1362,12 @@ document.addEventListener('click', (e) => {
     case 'aportar': return abrir('aporte', id);
     case 'ajustes': return abrir('ajustes');
     case 'cerrar': return cerrar();
+    case 'nuevo-mensual': return abrir('mensual');
+    case 'nuevo-registro': return abrir('registro');
+    case 'pagar-mensual': return pagarMensual(id);
+    case 'deshacer-mensual': return deshacerMensual(id);
+    case 'borrar-mensual': return confirmar(t, () => borrarMensual(id));
+    case 'borrar-registro': return confirmar(t, () => escribir(() => S.db.collection('aportes').doc(id).delete(), 'Ahorro quitado'));
     case 'copiar-codigo': return navigator.clipboard.writeText(S.hogar).then(() => toast('Código copiado'), () => toast(`Código: ${S.hogar}`));
     case 'salir': return auth.signOut().then(() => location.reload());
     case 'mes': S.mes = moverMes(S.mes, Number(delta)); return render();
@@ -1361,6 +1540,7 @@ function suscribir(db) {
   db.collection('pagos').onSnapshot((s) => { S.pagos = docs(s); render(); }, alError);
   db.collection('ahorro').onSnapshot((s) => { S.metas = docs(s); render(); }, alError);
   db.collection('aportes').onSnapshot((s) => { S.aportes = docs(s); render(); }, alError);
+  db.collection('recurrentes').onSnapshot((s) => { S.recurrentes = docs(s); render(); }, alError);
   db.doc('config/principal').onSnapshot((s) => { S.cfg = s.exists ? s.data() : {}; render(); }, alError);
   render();
 }
