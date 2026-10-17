@@ -475,7 +475,14 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outlin
 <script>
 const $ = (s) => document.querySelector(s);
 const esc = (v) => String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const r2 = (n) => Math.round((Number(n) || 0) * 100) / 100;
+// Acepta coma o punto decimal: el teclado en español escribe coma (12,50 y 12.50 son lo mismo).
+const numero = (n) => {
+  if (typeof n === 'number') return n;
+  const s = String(n ?? '').trim().replace(/\s/g, '');
+  const limpio = s.includes(',') && s.includes('.') ? s.replace(/\./g, '').replace(',', '.') : s.replace(',', '.');
+  return Number(limpio) || 0;
+};
+const r2 = (n) => Math.round(numero(n) * 100) / 100;
 const suma = (xs) => r2(xs.reduce((a, b) => a + b, 0));
 const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
 
@@ -987,7 +994,7 @@ function actualizarPrevia() {
   const el = $('#prev');
   if (!el) return;
   const fd = new FormData($('#form'));
-  const total = Number(fd.get('total'));
+  const total = numero(fd.get('total'));
   const n = Math.floor(Number(fd.get('cuotas')));
   const inicio = fd.get('inicio');
   if (!(total > 0) || !(n >= 1) || !inicio) {
@@ -1017,7 +1024,7 @@ function abrir(kind, id = null) {
         <input type="radio" name="tipo" id="t-gasto" value="gasto" checked><label for="t-gasto">Gasto</label>
         <input type="radio" name="tipo" id="t-ingreso" value="ingreso"><label for="t-ingreso">Ingreso</label>
       </div>
-      ${campo('Monto', '<input name="monto" type="number" inputmode="decimal" step="0.01" min="0.01" placeholder="0.00" required>', 'amount')}
+      ${campo('Monto', '<input name="monto" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00" required>', 'amount')}
       ${campo('Categoría', '<select name="categoria" id="cat" required></select>')}
       <div id="nueva-cat" class="grid2" hidden>
         ${campo('Nombre', '<input name="nuevaNombre" id="nueva-nombre" maxlength="20" placeholder="Mascotas, Gym…" disabled>')}
@@ -1035,7 +1042,7 @@ function abrir(kind, id = null) {
     f.innerHTML = `
       ${campo('¿Qué compraron o qué deben?', '<input name="nombre" maxlength="60" placeholder="Celular, tarjeta, préstamo…" required>')}
       <div class="grid2">
-        ${campo('Monto total', '<input name="total" type="number" inputmode="decimal" step="0.01" min="0.01" required>')}
+        ${campo('Monto total', '<input name="total" type="text" inputmode="decimal" autocomplete="off" required>')}
         ${campo('Cuotas', '<input name="cuotas" type="number" inputmode="numeric" step="1" min="1" max="360" value="12" required>')}
       </div>
       <div class="grid2">
@@ -1053,9 +1060,9 @@ function abrir(kind, id = null) {
     $('#sheet-t').textContent = 'Nueva meta de ahorro';
     f.innerHTML = `
       ${campo('¿Para qué ahorran?', '<input name="nombre" maxlength="60" placeholder="Viaje, fondo de emergencia, auto…" required>')}
-      ${campo('¿Cuánto necesitan?', '<input name="meta" type="number" inputmode="decimal" step="0.01" min="0.01" required>')}
+      ${campo('¿Cuánto necesitan?', '<input name="meta" type="text" inputmode="decimal" autocomplete="off" required>')}
       <div class="grid2">
-        ${campo('Ya tienen (opcional)', '<input name="inicial" type="number" inputmode="decimal" step="0.01" min="0" value="0">')}
+        ${campo('Ya tienen (opcional)', '<input name="inicial" type="text" inputmode="decimal" autocomplete="off" value="0">')}
         ${campo('Fecha límite (opcional)', `<input name="limite" type="date" min="${h}">`)}
       </div>
       <button type="submit" class="btn block">Crear meta</button>`;
@@ -1065,7 +1072,7 @@ function abrir(kind, id = null) {
     const m = S.metas.find((x) => x.id === id);
     $('#sheet-t').textContent = `Aportar a ${m?.nombre || 'la meta'}`;
     f.innerHTML = `
-      ${campo('Monto', '<input name="monto" type="number" inputmode="decimal" step="0.01" min="0.01" required>', 'amount')}
+      ${campo('Monto', '<input name="monto" type="text" inputmode="decimal" autocomplete="off" required>', 'amount')}
       ${campo('Fecha', `<input name="fecha" type="date" value="${h}" required>`)}
       <button type="submit" class="btn block">Guardar aporte</button>`;
   }
@@ -1079,7 +1086,7 @@ function abrir(kind, id = null) {
         ${campo('Nombre 2', `<input name="nombre2" maxlength="30" value="${esc(c.nombre2 || '')}" placeholder="Nombre de la otra persona">`)}
       </div>
       ${campo('Moneda', `<input name="moneda" maxlength="4" value="${esc(c.moneda || '$')}">`)}
-      ${campo('Ingreso mensual estimado', `<input name="ingresoEstimado" type="number" inputmode="decimal" step="0.01" min="0" value="${c.ingresoEstimado ?? ''}">`)}
+      ${campo('Ingreso mensual estimado', `<input name="ingresoEstimado" type="text" inputmode="decimal" autocomplete="off" value="${c.ingresoEstimado ?? ''}">`)}
       <p class="muted">En el ingreso pueden sumar el sueldo y las clases de fin de semana. Los gastos mensuales se anotan en Pagos.</p>
       ${S.demo ? '' : `<div class="stack tight">
         <span class="label">Código de su hogar</span>
@@ -1095,7 +1102,7 @@ function abrir(kind, id = null) {
     f.innerHTML = `
       ${campo('¿Qué es?', '<input name="nombre" maxlength="40" placeholder="Plan del teléfono, luz, internet…" required>')}
       <div class="grid2">
-        ${campo('Monto', '<input name="monto" type="number" inputmode="decimal" step="0.01" min="0.01" required>')}
+        ${campo('Monto', '<input name="monto" type="text" inputmode="decimal" autocomplete="off" required>')}
         ${campo('Día de pago', '<input name="dia" type="number" inputmode="numeric" step="1" min="1" max="31" value="1" required>')}
       </div>
       ${campo('Categoría', `<select name="categoria" required>${CATS.gasto.map((c) => `<option value="${esc(c)}">${esc(iconoDe(c))} ${esc(c)}</option>`).join('')}</select>`)}
@@ -1107,7 +1114,7 @@ function abrir(kind, id = null) {
   if (kind === 'registro') {
     $('#sheet-t').textContent = 'Registrar ahorro';
     f.innerHTML = `
-      ${campo('Monto', '<input name="monto" type="number" inputmode="decimal" step="0.01" min="0.01" required>', 'amount')}
+      ${campo('Monto', '<input name="monto" type="text" inputmode="decimal" autocomplete="off" required>', 'amount')}
       ${campo('¿A dónde va?', `<select name="meta"><option value="">Ahorro general</option>${S.metas.map((m) => `<option value="${esc(m.id)}">${esc(m.nombre)}</option>`).join('')}</select>`)}
       <div class="grid2">
         ${campo('Fecha', `<input name="fecha" type="date" value="${h}" required>`)}
