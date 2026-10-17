@@ -388,6 +388,7 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outlin
   <p class="muted">Entren con su cuenta de Google. Así sus datos quedan guardados y los dos pueden verlos desde su teléfono.</p>
   <button type="button" class="btn block" id="btn-entrar">Entrar con Google</button>
   <button type="button" class="btn ghost block" id="btn-demo">Probar sin cuenta</button>
+  <p id="msg-acceso" class="aviso" role="status"></p>
 </section>
 
 <section class="acceso-card" data-pantalla="hogar" hidden>
@@ -1357,7 +1358,28 @@ function suscribir(db) {
   render();
 }
 
-$('#btn-entrar').addEventListener('click', () => auth.signInWithRedirect(new firebase.auth.GoogleAuthProvider()));
+// Con ventana emergente la sesión queda en esta página; con redirección, Safari a veces la pierde al volver.
+function mensajeAcceso(e) {
+  switch (e?.code) {
+    case 'auth/unauthorized-domain': return 'Falta autorizar este sitio en Firebase: Authentication → Settings → Authorized domains.';
+    case 'auth/operation-not-allowed': return 'Google no está activado en Firebase: Authentication → Sign-in method.';
+    case 'auth/popup-blocked': return 'El navegador bloqueó la ventana de Google. Permite ventanas emergentes para esta página e inténtalo otra vez.';
+    case 'auth/popup-closed-by-user':
+    case 'auth/cancelled-popup-request': return 'Se cerró la ventana de Google. Toca el botón otra vez.';
+    default: return `No se pudo entrar (${e?.code || 'error'}). Inténtalo otra vez.`;
+  }
+}
+$('#btn-entrar').addEventListener('click', async () => {
+  const msg = $('#msg-acceso');
+  msg.textContent = 'Abriendo Google…';
+  try {
+    await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+    msg.textContent = '';
+  } catch (e) {
+    console.error(e);
+    msg.textContent = mensajeAcceso(e);
+  }
+});
 $('#btn-demo').addEventListener('click', entrarDemo);
 $('#btn-crear').addEventListener('click', () => accionHogar(crearHogar));
 $('#form-unirse').addEventListener('submit', (e) => {
