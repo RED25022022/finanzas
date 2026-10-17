@@ -385,8 +385,13 @@ button:focus-visible, a:focus-visible { outline: 2px solid var(--accent); outlin
 <section class="acceso-card" data-pantalla="acceso" hidden>
   <span class="mark" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M5 19V11M12 19V5M19 19v-6"/></svg></span>
   <h2>Nuestras finanzas</h2>
-  <p class="muted">Entren con su cuenta de Google. Así sus datos quedan guardados y los dos pueden verlos desde su teléfono.</p>
-  <button type="button" class="btn block" id="btn-entrar">Entrar con Google</button>
+  <p class="muted">Entren con su correo y una contraseña. Así sus datos quedan guardados y los dos pueden verlos desde su teléfono.</p>
+  <form id="form-acceso" class="stack">
+    <label class="field"><span>Correo</span><input name="correo" type="email" required autocomplete="email"></label>
+    <label class="field"><span>Contraseña (mínimo 6 caracteres)</span><input name="clave" type="password" required minlength="6" autocomplete="current-password"></label>
+    <button type="submit" class="btn block">Entrar</button>
+    <button type="button" class="btn ghost block" id="btn-registrar">Crear cuenta nueva</button>
+  </form>
   <button type="button" class="btn ghost block" id="btn-demo">Probar sin cuenta</button>
   <p id="msg-acceso" class="aviso" role="status"></p>
 </section>
@@ -1358,27 +1363,43 @@ function suscribir(db) {
   render();
 }
 
-// Con ventana emergente la sesión queda en esta página; con redirección, Safari a veces la pierde al volver.
+// Correo y contraseña: no depende de ventanas ni de redirecciones entre dominios, así que Safari no pierde la sesión.
 function mensajeAcceso(e) {
   switch (e?.code) {
-    case 'auth/unauthorized-domain': return 'Falta autorizar este sitio en Firebase: Authentication → Settings → Authorized domains.';
-    case 'auth/operation-not-allowed': return 'Google no está activado en Firebase: Authentication → Sign-in method.';
-    case 'auth/popup-blocked': return 'El navegador bloqueó la ventana de Google. Permite ventanas emergentes para esta página e inténtalo otra vez.';
-    case 'auth/popup-closed-by-user':
-    case 'auth/cancelled-popup-request': return 'Se cerró la ventana de Google. Toca el botón otra vez.';
-    default: return `No se pudo entrar (${e?.code || 'error'}). Inténtalo otra vez.`;
+    case 'auth/invalid-email': return 'El correo no es válido.';
+    case 'auth/missing-password':
+    case 'auth/weak-password': return 'La contraseña debe tener al menos 6 caracteres.';
+    case 'auth/email-already-in-use': return 'Ese correo ya tiene cuenta. Toquen Entrar.';
+    case 'auth/invalid-credential':
+    case 'auth/wrong-password':
+    case 'auth/user-not-found': return 'Correo o contraseña incorrectos.';
+    case 'auth/operation-not-allowed': return 'Falta activar Correo y contraseña en Firebase: Authentication → Sign-in method.';
+    case 'auth/network-request-failed': return 'Sin conexión. Revisen su internet e inténtenlo otra vez.';
+    case 'auth/too-many-requests': return 'Demasiados intentos. Esperen unos minutos.';
+    default: return `No se pudo entrar (${e?.code || 'error'}). Inténtenlo otra vez.`;
   }
 }
-$('#btn-entrar').addEventListener('click', async () => {
+async function accederConCorreo(crear) {
+  const f = $('#form-acceso');
   const msg = $('#msg-acceso');
-  msg.textContent = 'Abriendo Google…';
+  const correo = f.correo.value.trim();
+  const clave = f.clave.value;
+  msg.textContent = crear ? 'Creando cuenta…' : 'Entrando…';
   try {
-    await auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+    if (crear) await auth.createUserWithEmailAndPassword(correo, clave);
+    else await auth.signInWithEmailAndPassword(correo, clave);
     msg.textContent = '';
   } catch (e) {
     console.error(e);
     msg.textContent = mensajeAcceso(e);
   }
+}
+$('#form-acceso').addEventListener('submit', (e) => {
+  e.preventDefault();
+  accederConCorreo(false);
+});
+$('#btn-registrar').addEventListener('click', () => {
+  if ($('#form-acceso').reportValidity()) accederConCorreo(true);
 });
 $('#btn-demo').addEventListener('click', entrarDemo);
 $('#btn-crear').addEventListener('click', () => accionHogar(crearHogar));
