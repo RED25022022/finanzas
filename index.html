@@ -1241,6 +1241,8 @@ async function iniciar() {
   firebase.initializeApp(window.FIREBASE_CONFIG);
   auth = firebase.auth();
   fs = firebase.firestore();
+  // Mantiene la sesión guardada en el teléfono: no hay que volver a entrar cada vez que se abre la página.
+  auth.setPersistence(firebase.auth.Auth.Persistence.LOCAL).catch(console.error);
   auth.onAuthStateChanged(async (usr) => {
     if (!usr) return mostrarEstado('acceso');
     usuario = usr;
