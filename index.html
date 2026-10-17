@@ -525,6 +525,7 @@ const PALETA = ['#1F5FBF', '#1A8DBE', '#4E62CC', '#118A7C', '#7A6AD6', '#C9731A'
 const hashColor = (s) => { let h = 0; for (const ch of s) h = (h * 31 + ch.codePointAt(0)) >>> 0; return PALETA[h % PALETA.length]; };
 const colorDe = (cat) => COLOR[cat] || hashColor(cat || '');
 const iconoDe = (cat) => ICONO[cat] || (S.movs || []).find((m) => m.categoria === cat && m.icono)?.icono || '🏷️';
+const VERSION = 'decimales con coma · 17 oct 2026';
 const TITULOS = { inicio: 'Resumen', movs: 'Movimientos', cuotas: 'Pagos', ahorro: 'Ahorro' };
 
 const S = {
@@ -1024,7 +1025,7 @@ function abrir(kind, id = null) {
         <input type="radio" name="tipo" id="t-gasto" value="gasto" checked><label for="t-gasto">Gasto</label>
         <input type="radio" name="tipo" id="t-ingreso" value="ingreso"><label for="t-ingreso">Ingreso</label>
       </div>
-      ${campo('Monto', '<input name="monto" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00" required>', 'amount')}
+      ${campo('Monto', '<input name="monto" type="text" inputmode="decimal" autocomplete="off" placeholder="0,00" required>', 'amount')}
       ${campo('Categoría', '<select name="categoria" id="cat" required></select>')}
       <div id="nueva-cat" class="grid2" hidden>
         ${campo('Nombre', '<input name="nuevaNombre" id="nueva-nombre" maxlength="20" placeholder="Mascotas, Gym…" disabled>')}
@@ -1093,6 +1094,7 @@ function abrir(kind, id = null) {
         <div class="row"><b class="num">${esc(S.hogar || '')}</b><button type="button" class="btn ghost sm" data-act="copiar-codigo">Copiar</button></div>
         <p class="muted">Pásenselo a su pareja para que se una desde su propio teléfono.</p>
       </div>`}
+      <p class="muted">Versión de la app: ${VERSION}</p>
       <button type="submit" class="btn block">Guardar ajustes</button>
       ${S.demo ? '' : '<button type="button" class="btn ghost block" data-act="salir">Cerrar sesión</button>'}`;
   }
